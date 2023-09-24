@@ -25,8 +25,8 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
     - PDF: converted PDF
 
     Raises:
-    - FileNotFoundError
-    - PIL.UnidentifiedImageError:
+    - FileNotFoundError: Converting images to PDF failed, because \"{image_filepath}\" could not be found.
+    - PIL.UnidentifiedImageError: Converting \"{image_filepath}\" to PDF failed, because image is corrupted.
     """
 
     conversion_failures_filepath: list[str]=[]  # conversion failures
