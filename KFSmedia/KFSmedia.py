@@ -212,14 +212,17 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
 
 
         medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+        logger.debug("")
         logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")
         while all([thread.done() for thread in threads if thread!=None])==False:                                                                                # as long as threads still not done: loop here for updating progress
             medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                            # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
             if medias_downloaded_count_old!=medias_downloaded_count:                                                                                            # only if number changed:
+                logger.debug("")
                 logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")   # refresh console
                 medias_downloaded_count_old=medias_downloaded_count                                                                                             # update count old
             time.sleep(0.1)                                                                                                                                     # sleep in any case to not throttle code by refreshing with more than 10Hz
         medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+        logger.debug("")
         logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")
 
         for i, thread in enumerate(threads):    # collect results
@@ -286,14 +289,17 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
 
         
         medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+        logger.debug("")
         logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")
         while all([task.done() for task in tasks if task!=None])==False:                                                                                        # as long as threads still not done: loop here for updating progress
             medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                    # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
             if medias_downloaded_count_old!=medias_downloaded_count:                                                                                            # only if number changed:
+                logger.debug("")
                 logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")   # refresh console
                 medias_downloaded_count_old=medias_downloaded_count                                                                                             # update count old
             await asyncio.sleep(0.1)                                                                                                                            # sleep in any case to not throttle code by refreshing with more than 10Hz
         medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+        logger.debug("")
         logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")
 
         for i, task in enumerate(tasks):    # collect results
