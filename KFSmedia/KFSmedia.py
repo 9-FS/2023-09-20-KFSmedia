@@ -86,9 +86,9 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
 
 
     if PDF_filepath!=None:   # if filepath given: save PDF
-        logger.info(f"Saving {PDF_filepath}...")
+        logger.info(f"Saving \"{PDF_filepath}\"...")
         PDF[0].save(PDF_filepath, save_all=True, append_images=PDF[1:])
-        logger.info(f"\rSaved {PDF_filepath}.")
+        logger.info(f"\rSaved \"{PDF_filepath}\".")
 
     if if_success_delete_images==True:    # try to delete all source images if desired
         for image_filepath in images_filepath:
@@ -163,7 +163,7 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
     - medias_URL: media URL to download media from. If no custom worker_function is defined, uses download_media_default(...) and expects direct media URL.
     - medias_filepath: media filepaths to save medias at. Must have same length as medias_URL. If an entry is None, does not try to save that media.
     - worker_function: function to download 1 particular media. Must at least take parameters "media_URL" and "media_filepath". Additional **kwargs are forwarded.
-    - workers_max: maximum number of worker threads at the same time. Use 1 for single thread operation and None for maximum number of workers.
+    - workers_max: maximum number of worker threads at the same time. Use 1 for single thread operation and None for unrestricted number of workers.
     - **kwargs: additional keyword arguments to forward to custom worker function, no *args so user is forced to accept media_URL and media_filepath and no confusion ensues because of unexpected parameter passing
 
     Returns:
@@ -240,7 +240,7 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
     - medias_URL: media URL to download media from. If no custom worker_function is defined, uses download_media_default(...) and expects direct media URL.
     - medias_filepath: media filepaths to save medias at. Must have same length as medias_URL. If an entry is None, does not try to save that media.
     - worker_function: function to download 1 particular media. Must at least take parameters "media_URL" and "media_filepath". Additional **kwargs are forwarded.
-    - workers_max: maximum number of worker threads at the same time. Use 1 for single thread operation and None for maximum number of workers.
+    - workers_max: maximum number of worker threads at the same time. Use 1 for single thread operation and None for unrestricted number of workers.
     - **kwargs: additional keyword arguments to forward to custom worker function, no *args so user is forced to accept media_URL and media_filepath and no confusion ensues because of unexpected parameter passing
 
     Returns:
