@@ -12,6 +12,9 @@ import time
 import typing                           # function type hint
 
 
+class ConversionError(Exception):
+    pass
+
 def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=None, if_success_delete_images: bool=True) -> list[PIL.Image.Image]:
     """
     Converts images at filepaths to PDF and returns PDF. Upon failure exception will contain list of filepaths that failed.
@@ -25,8 +28,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
     - PDF: converted PDF
 
     Raises:
-    - FileNotFoundError: Converting images to PDF failed, because \"{image_filepath}\" could not be found.
-    - PIL.UnidentifiedImageError: Converting \"{image_filepath}\" to PDF failed, because image is corrupted.
+    - ConversionError: Converting \"{image_filepath}\" to PDF failed, because image could not be found or is corrupted.
     """
 
     conversion_failures_filepath: list[str]=[]  # conversion failures
@@ -52,10 +54,10 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
             with PIL.Image.open(image_filepath) as image_file:          # open image
                 PDF.append(image_file.convert("RGBA").convert("RGB"))   # convert, append to PDF
 
-        except FileNotFoundError:   # if user gave wrong filepath:
-            success=False           # conversion not successful
-            logger.error(f"Converting images to PDF failed, because \"{image_filepath}\" could not be found.")
-            raise
+        except FileNotFoundError:                               # if user gave wrong filepath:
+            success=False                                       # conversion not successful
+            logger.error(f"Converting \"{image_filepath}\" to PDF failed, because image could not be found..")
+            conversion_failures_filepath.append(image_filepath) # append to failure list so parent function can retry downloading
         
         except PIL.UnidentifiedImageError:                      # if image is corrupted, earlier download may have failed:
             success=False                                       # conversion not successful
@@ -79,7 +81,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
         else:
             logger.info(f"\rConverted \"{image_filepath}\" to PDF.")
     if success==False:  # if unsuccessful: throw exception with failure list
-        raise PIL.UnidentifiedImageError(conversion_failures_filepath)
+        raise ConversionError(conversion_failures_filepath)
     else:
         logger.info("\rConverted images to PDF.")
 
