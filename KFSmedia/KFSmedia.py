@@ -78,8 +78,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
                 else:
                     logger.info(f"\rDeleted corrupted image \"{image_filepath}\".")
                     break                       # break out of inner loop, but keep trying to convert images to PDF to remove all other corrupt images in this function call already and not later
-        else:
-            logger.info(f"\rConverted \"{image_filepath}\" to PDF.")
+    
     if success==False:  # if unsuccessful: throw exception with failure list
         raise ConversionError(conversion_failures_filepath)
     else:
@@ -92,15 +91,11 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
         logger.info(f"\rSaved {PDF_filepath}.")
 
     if if_success_delete_images==True:    # try to delete all source images if desired
-        logger.info(f"Deleting images...")
         for image_filepath in images_filepath:
             try:
                 os.remove(image_filepath)
             except PermissionError:
                 logger.error(f"Deleting \"{image_filepath}\" failed. Skipping image...")
-            else:
-                logger.info(f"\rDeleted \"{image_filepath}\"")
-        logger.info("\rDeleted images.")
 
     return PDF  # return PDF in case needed internally
 
