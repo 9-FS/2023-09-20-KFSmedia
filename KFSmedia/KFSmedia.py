@@ -56,7 +56,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
 
         except FileNotFoundError:                               # if user gave wrong filepath:
             success=False                                       # conversion not successful
-            logger.error(f"Converting \"{image_filepath}\" to PDF failed, because image could not be found..")
+            logger.error(f"Converting \"{image_filepath}\" to PDF failed, because image could not be found.")
             conversion_failures_filepath.append(image_filepath) # append to failure list so parent function can retry downloading
         
         except PIL.UnidentifiedImageError:                      # if image is corrupted, earlier download may have failed:
@@ -95,7 +95,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
             try:
                 os.remove(image_filepath)
             except PermissionError:
-                logger.error(f"Deleting \"{image_filepath}\" failed. Skipping image...")
+                logger.error(f"Deleting \"{image_filepath}\" failed. Skipping image.")
 
     return PDF  # return PDF in case needed internally
 
