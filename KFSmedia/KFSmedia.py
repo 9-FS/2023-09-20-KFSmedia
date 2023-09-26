@@ -28,7 +28,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
     - PDF: converted PDF
 
     Raises:
-    - ConversionError: Converting \"{image_filepath}\" to PDF failed, because image could not be found or is corrupted.
+    - ConversionError: Converting \"{image_filepath}\" to PDF failed, because image could not be found or is corrupted. Exception contains list of filepaths that failed.
     """
 
     conversion_failures_filepath: list[str]=[]  # conversion failures
@@ -170,13 +170,16 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
     - medias: downloaded or loaded medias
 
     Raises:
+    - DownloadError: Downloading media \"{medias_URL[i]}\" failed. Exception contains list of URL that failed.
     - ValueError: Length of medias_URL and medias_filepath must be the same.
     """
 
+    download_failures_URL: list[str]=[]                             # download failures
     medias: list[None|bytes]=[None for _ in range(len(medias_URL))] # medias downloaded or loaded, order should be kept even if multithreaded that's why initialised with None and results are placed at correct i
     medias_downloaded_count: int=0                                  # how many already loaded or downloaded
     medias_downloaded_count_old: int=0                              # how many already loaded or downloaded in iteration previous
     logger: logging.Logger                                          # logger
+    success: bool=True                                              # download successful?
     threads: list[concurrent.futures.Future|None]=[]                # worker threads for download, None means no worker thread was necessary for that media, used to keep media order
     
 
@@ -208,24 +211,41 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
             threads.append(thread_manager.submit(worker_function, media_URL=medias_URL[i], media_filepath=medias_filepath[i], **kwargs))    # download and save media in worker thread
 
 
-        medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
-        logger.debug("")
-        logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")
-        while all([thread.done() for thread in threads if thread!=None])==False:                                                                                # as long as threads still not done: loop here for updating progress
-            medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                            # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
-            if medias_downloaded_count_old!=medias_downloaded_count:                                                                                            # only if number changed:
+        medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                            # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+        logger.info(f"Download media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
+        while all([thread.done() for thread in threads if thread!=None])==False:                                                                                            # as long as threads still not done: loop here for updating progress
+            medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+            if medias_downloaded_count_old!=medias_downloaded_count:                                                                                                        # only if number changed:
                 logger.debug("")
-                logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")   # refresh console
-                medias_downloaded_count_old=medias_downloaded_count                                                                                             # update count old
-            time.sleep(0.1)                                                                                                                                     # sleep in any case to not throttle code by refreshing with more than 10Hz
-        medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+                logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.") # refresh console
+                medias_downloaded_count_old=medias_downloaded_count                                                                                                         # update count old
+            time.sleep(0.1)                                                                                                                                                 # sleep in any case to not throttle code by refreshing with more than 10Hz
+        medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                            # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
         logger.debug("")
-        logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")
+        logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
 
-        for i, thread in enumerate(threads):    # collect results
-            if thread==None:                    # if thread is None: skip
+        for i, thread in enumerate(threads):                # collect results
+            if thread==None:                                # if thread is None: skip
                 continue
-            medias[i]=thread.result()           # enter result, because of None threads: i fits
+            try:
+                medias[i]=thread.result()                   # enter result, because of None threads: i fits
+            except requests.ConnectionError as e:
+                success=False                               # download not successful
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with requests.ConnectionError. Error message: {e.args}.")
+                download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
+            except requests.HTTPError as e:
+                success=False                               # download not successful
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with status code {e.response.status_code}.")
+                download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
+            except requests.Timeout as e:
+                success=False                               # download not successful
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with requests.Timeout. Error message: {e.args}.")
+                download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
+        
+        if success==False:  # if unsuccessful: throw exception with failure list
+            raise DownloadError(download_failures_URL)
+        else:
+            logger.info("Downloaded medias.")
 
     return medias   # type:ignore
 
@@ -247,13 +267,16 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
     - medias: downloaded or loaded medias
 
     Raises:
+    - DownloadError: Downloading media \"{medias_URL[i]}\" failed. Exception contains list of URL that failed.
     - ValueError: Length of medias_URL and medias_filepath must be the same.
     """
 
+    download_failures_URL: list[str]=[]                             # download failures
     medias: list[None|bytes]=[None for _ in range(len(medias_URL))] # medias downloaded or loaded, order should be kept even if multithreaded that's why initialised with None and results are placed at correct i
     medias_downloaded_count: int=0                                  # how many already loaded or downloaded
     medias_downloaded_count_old: int=0                              # how many already loaded or downloaded in iteration previous
     logger: logging.Logger                                          # logger
+    success: bool=True                                              # download successful?
     tasks: list[asyncio.Future|None]=[]                             # worker tasks for download, None means no worker task was necessary for that media, used to keep media order
     
 
@@ -285,23 +308,44 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
             tasks.append(task_manager.create_task(worker_function(media_URL=medias_URL[i], media_filepath=medias_filepath[i], **kwargs)))   # download and save media in worker task
 
         
-        medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
-        logger.debug("")
-        logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")
-        while all([task.done() for task in tasks if task!=None])==False:                                                                                        # as long as threads still not done: loop here for updating progress
-            medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                    # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
-            if medias_downloaded_count_old!=medias_downloaded_count:                                                                                            # only if number changed:
+        medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+        logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
+        while all([task.done() for task in tasks if task!=None])==False:                                                                                                        # as long as threads still not done: loop here for updating progress
+            medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                                    # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+            if medias_downloaded_count_old!=medias_downloaded_count:                                                                                                            # only if number changed:
                 logger.debug("")
-                logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")   # refresh console
-                medias_downloaded_count_old=medias_downloaded_count                                                                                             # update count old
-            await asyncio.sleep(0.1)                                                                                                                            # sleep in any case to not throttle code by refreshing with more than 10Hz
-        medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+                logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")     # refresh console
+                medias_downloaded_count_old=medias_downloaded_count                                                                                                             # update count old
+            await asyncio.sleep(0.1)                                                                                                                                            # sleep in any case to not throttle code by refreshing with more than 10Hz
+        medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
         logger.debug("")
-        logger.info(f"\rDownloaded media {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)}.")
+        logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
 
         for i, task in enumerate(tasks):    # collect results
             if task==None:                  # if task is None: skip
                 continue
-            medias[i]=task.result()         # enter result, because of None tasks: i fits
+            try:
+                medias[i]=task.result()                     # enter result, because of None tasks: i fits
+            except requests.ConnectionError as e:
+                success=False                               # download not successful
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with requests.ConnectionError. Error message: {e.args}.")
+                download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
+            except requests.HTTPError as e:
+                success=False                               # download not successful
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with status code {e.response.status_code}.")
+                download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
+            except requests.Timeout as e:
+                success=False                               # download not successful
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with requests.Timeout. Error message: {e.args}.")
+                download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
+        
+        if success==False:  # if unsuccessful: throw exception with failure list
+            raise DownloadError(download_failures_URL)
+        else:
+            logger.info("Downloaded medias.")
 
     return medias   # type:ignore
+
+
+class DownloadError(Exception):
+    pass
