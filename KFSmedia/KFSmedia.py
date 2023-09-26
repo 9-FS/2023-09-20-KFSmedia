@@ -124,7 +124,7 @@ def download_media_default(media_URL: str, media_filepath: str|None=None) -> byt
 
     page=requests.get(media_URL)    # download media, exception handling outside
     if page.ok==False:              # if something went wrong: exception handling outside
-        raise requests.HTTPError(page)
+        raise requests.HTTPError(response=page)
     media=page.content              # if everything ok: copy media
 
 
