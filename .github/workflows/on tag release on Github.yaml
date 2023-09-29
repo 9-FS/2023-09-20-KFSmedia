@@ -1,6 +1,6 @@
 name: On Tag Release on Github
 env:
-  PROJECT_NAME: KFSmedia Library
+  PROJECT_NAME: KFSmedia
   PYTHON_VERSION: ^3.11.0
 on:
   push: 

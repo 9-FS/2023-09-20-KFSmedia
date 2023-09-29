@@ -1,11 +1,11 @@
 ---
-Topic: "KFSmedia Library"
+Topic: "KFSmedia"
 Author: "구FS"
 ---
 <link href="./doc_templates/md_style.css" rel="stylesheet"></link>
 <body>
 
-# <p style="text-align: center;">KFSmedia Library</p>
+# <p style="text-align: center;">KFSmedia</p>
 <br>
 <br>
 
