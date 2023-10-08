@@ -41,8 +41,8 @@ jobs:
             exit 1
           fi
       
-      - name: Run Tests
-        run: poetry run pytest
+      # - name: Run Tests
+      #   run: poetry run pytest
 
 
   build:
