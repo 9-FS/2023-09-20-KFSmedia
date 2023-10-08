@@ -229,17 +229,13 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
                 continue
             try:
                 medias[i]=thread.result()                   # enter result, because of None threads: i fits
-            except requests.ConnectionError as e:
-                success=False                               # download not successful
-                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with requests.ConnectionError. Error message: {e.args}.")
-                download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
             except requests.HTTPError as e:
                 success=False                               # download not successful
                 logger.error(f"Downloading media \"{medias_URL[i]}\" failed with status code {e.response.status_code}.")
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
-            except requests.Timeout as e:
+            except (requests.exceptions.ChunkedEncodingError, requests.ConnectionError, requests.Timeout) as e:
                 success=False                               # download not successful
-                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with requests.Timeout. Error message: {e.args}.")
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with {KFSfstr.full_class_name(e)}. Error message: {e.args}.")
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
         
         if success==False:  # if unsuccessful: throw exception with failure list
@@ -326,17 +322,13 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
                 continue
             try:
                 medias[i]=task.result()                     # enter result, because of None tasks: i fits
-            except requests.ConnectionError as e:
-                success=False                               # download not successful
-                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with requests.ConnectionError. Error message: {e.args}.")
-                download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
             except requests.HTTPError as e:
                 success=False                               # download not successful
                 logger.error(f"Downloading media \"{medias_URL[i]}\" failed with status code {e.response.status_code}.")
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
-            except requests.Timeout as e:
+            except (requests.exceptions.ChunkedEncodingError, requests.ConnectionError, requests.Timeout) as e:
                 success=False                               # download not successful
-                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with requests.Timeout. Error message: {e.args}.")
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with {KFSfstr.full_class_name(e)}. Error message: {e.args}.")
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
         
         if success==False:  # if unsuccessful: throw exception with failure list
