@@ -1,10 +1,12 @@
 # Copyright (c) 2023 구FS, all rights reserved. Subject to the MIT licence in `licence.md`.
 import asyncio                          # concurrency
-import concurrent.futures               # multithreading
+import copy
 import inspect
 from KFSfstr import KFSfstr
 from KFSlog import KFSlog
 import logging
+import multiprocessing                  # CPU core count
+import pebble                           # multiprocessing
 import PIL, PIL.Image, PIL.ImageFile    # conversion to PDF
 import os
 import requests
@@ -154,7 +156,7 @@ async def download_media_default_async(media_URL: str, media_filepath: str|None=
 
 
 def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
-                    worker_function: typing.Callable=download_media_default, workers_max: int|None=None,
+                    worker_function: typing.Callable=download_media_default, workers_max=multiprocessing.cpu_count(), timeout: float|None=None,
                     **kwargs) -> list[bytes]: 
     """
     Downloads medias from medias_URL and saves as specified in medias_filepath. Exceptions from worker function will not be catched. If file already exists at media filepath, assumes that this media has already been downloaded and does not redownload it. Also loads it and uses it in return list.
@@ -163,7 +165,8 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
     - medias_URL: media URL to download media from. If no custom worker_function is defined, uses download_media_default(...) and expects direct media URL.
     - medias_filepath: media filepaths to save medias at. Must have same length as medias_URL. If an entry is None, does not try to save that media.
     - worker_function: function to download 1 particular media. Must at least take parameters "media_URL" and "media_filepath". Additional **kwargs are forwarded.
-    - workers_max: maximum number of worker threads at the same time. Use 1 for single thread operation and None for unrestricted number of workers.
+    - workers_max: maximum number of worker processes at the same time. Use 1 for single process operation and None for unrestricted number of workers.
+    - timeout: timeout for a worker process in seconds. If None, no timeout.
     - **kwargs: additional keyword arguments to forward to custom worker function, no *args so user is forced to accept media_URL and media_filepath and no confusion ensues because of unexpected parameter passing
 
     Returns:
@@ -175,12 +178,13 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
     """
 
     download_failures_URL: list[str]=[]                             # download failures
-    medias: list[None|bytes]=[None for _ in range(len(medias_URL))] # medias downloaded or loaded, order should be kept even if multithreaded that's why initialised with None and results are placed at correct i
+    kwargs_copy: dict                                               # copy of kwargs to not modify original, also contains media_URL and media_filepath
+    logger: logging.Logger                                          # logger
+    medias: list[None|bytes]=[None for _ in range(len(medias_URL))] # medias downloaded or loaded, order should be kept even if multiprocessed that's why initialised with None and results are placed at correct i
     medias_downloaded_count: int=0                                  # how many already loaded or downloaded
     medias_downloaded_count_old: int=0                              # how many already loaded or downloaded in iteration previous
-    logger: logging.Logger                                          # logger
+    processes: list[pebble.ProcessFuture|None]=[]                   # worker process for download, None means no worker process was necessary for that media, used to keep media order
     success: bool=True                                              # download successful?
-    threads: list[concurrent.futures.Future|None]=[]                # worker threads for download, None means no worker thread was necessary for that media, used to keep media order
     
 
     medias_URL=list(medias_URL)
@@ -197,43 +201,51 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
 
 
     logger.info(f"Downloading medias...")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers_max) as thread_manager:  # open threadpool with maximum amount of workers as specified
-        for i in range(len(medias_URL)):                                                    # download missing medias and save as specified
-            if medias_filepath[i]!=None:                                                    # if media could interact with file system:
-                if os.path.isfile(medias_filepath[i])==True:                                # if media already exists: skip downloading, load for return # type:ignore
-                    with open(medias_filepath[i], "rb") as media_file:                      # type:ignore
+    with pebble.ProcessPool(max_workers=workers_max) as process_manager:            # open process pool
+        for i in range(len(medias_URL)):                                            # download missing medias and save as specified
+            if medias_filepath[i]!=None:                                            # if media could interact with file system:
+                if os.path.isfile(medias_filepath[i])==True:                        # if media already exists: skip downloading, load for return # type:ignore
+                    with open(medias_filepath[i], "rb") as media_file:              # type:ignore
                         medias[i]=media_file.read()
-                    threads.append(None)
+                    processes.append(None)
                     continue
-                elif os.path.dirname(medias_filepath[i])!="":                               # if media does not exist already and filepath contains directory part: # type:ignore
-                    os.makedirs(os.path.dirname(medias_filepath[i]), exist_ok=True)         # create necessary directories for media file # type:ignore
+                elif os.path.dirname(medias_filepath[i])!="":                       # if media does not exist already and filepath contains directory part: # type:ignore
+                    os.makedirs(os.path.dirname(medias_filepath[i]), exist_ok=True) # create necessary directories for media file # type:ignore
             
-            threads.append(thread_manager.submit(worker_function, media_URL=medias_URL[i], media_filepath=medias_filepath[i], **kwargs))    # download and save media in worker thread
+            kwargs_copy=copy.deepcopy(kwargs)   # copy kwargs to not modify original
+            if "media_URL" in kwargs:           # if already exists and will be overwritten: warning
+                logging.warning(f"Provided keyword argument media_URL \"{kwargs['media_URL']}\" is overwritten by medias_URL[{i}] \"{medias_URL[i]}\".")
+            kwargs_copy["media_URL"]=medias_URL[i]
+            if "media_filepath" in kwargs:      # if already exists and will be overwritten: warning
+                logging.warning(f"Provided keyword argument media_filepath \"{kwargs['media_filepath']}\" is overwritten by medias_filepath[{i}] \"{medias_filepath[i]}\".")
+            kwargs_copy["media_filepath"]=medias_filepath[i]
+            
+            processes.append(process_manager.schedule(worker_function, kwargs=kwargs_copy, timeout=timeout)) # download and save media in worker process # type:ignore
 
 
-        medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                            # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
-        logger.info(f"Download media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
-        while all([thread.done() for thread in threads if thread!=None])==False:                                                                                            # as long as threads still not done: loop here for updating progress
-            medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
-            if medias_downloaded_count_old!=medias_downloaded_count:                                                                                                        # only if number changed:
+        medias_downloaded_count=len(medias)-medias.count(None)+[process.done() for process in processes if process!=None].count(True)                                           # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+        logger.info(f"Download media process {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
+        while all([process.done() for process in processes if process!=None])==False:                                                                                           # as long as processes still not done: loop here for updating progress
+            medias_downloaded_count=len(medias)-medias.count(None)+[process.done() for process in processes if process!=None].count(True)                                       # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+            if medias_downloaded_count_old!=medias_downloaded_count:                                                                                                            # only if number changed:
                 logger.debug("")
-                logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.") # refresh console
-                medias_downloaded_count_old=medias_downloaded_count                                                                                                         # update count old
-            time.sleep(0.1)                                                                                                                                                 # sleep in any case to not throttle code by refreshing with more than 10Hz
-        medias_downloaded_count=len(medias)-medias.count(None)+[thread.done() for thread in threads if thread!=None].count(True)                                            # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
+                logger.info(f"\rDownload media process {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")    # refresh console
+                medias_downloaded_count_old=medias_downloaded_count                                                                                                             # update count old
+            time.sleep(0.1)                                                                                                                                                     # sleep in any case to not throttle code by refreshing with more than 10Hz
+        medias_downloaded_count=len(medias)-medias.count(None)+[process.done() for process in processes if process!=None].count(True)                                           # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
         logger.debug("")
-        logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
+        logger.info(f"\rDownload media process {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
 
-        for i, thread in enumerate(threads):                # collect results
-            if thread==None:                                # if thread is None: skip
+        for i, process in enumerate(processes):             # collect results
+            if process==None:                               # if process is None: skip
                 continue
             try:
-                medias[i]=thread.result()                   # enter result, because of None threads: i fits
+                medias[i]=process.result(timeout)           # enter result, because of None processes: i fits
             except requests.HTTPError as e:
                 success=False                               # download not successful
                 logger.error(f"Downloading media \"{medias_URL[i]}\" failed with status code {e.response.status_code}.")    # type:ignore
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
-            except (requests.exceptions.ChunkedEncodingError, requests.ConnectionError, requests.Timeout) as e:
+            except (requests.exceptions.ChunkedEncodingError, requests.ConnectionError, requests.Timeout, TimeoutError) as e:
                 success=False                               # download not successful
                 logger.error(f"Downloading media \"{medias_URL[i]}\" failed with {KFSfstr.full_class_name(e)}. Error message: {e.args}.")
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
@@ -256,7 +268,6 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
     - medias_URL: media URL to download media from. If no custom worker_function is defined, uses download_media_default(...) and expects direct media URL.
     - medias_filepath: media filepaths to save medias at. Must have same length as medias_URL. If an entry is None, does not try to save that media.
     - worker_function: function to download 1 particular media. Must at least take parameters "media_URL" and "media_filepath". Additional **kwargs are forwarded.
-    - workers_max: maximum number of worker threads at the same time. Use 1 for single thread operation and None for unrestricted number of workers.
     - **kwargs: additional keyword arguments to forward to custom worker function, no *args so user is forced to accept media_URL and media_filepath and no confusion ensues because of unexpected parameter passing
 
     Returns:
@@ -306,7 +317,7 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
         
         medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
         logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
-        while all([task.done() for task in tasks if task!=None])==False:                                                                                                        # as long as threads still not done: loop here for updating progress
+        while all([task.done() for task in tasks if task!=None])==False:                                                                                                        # as long as processes still not done: loop here for updating progress
             medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                                    # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
             if medias_downloaded_count_old!=medias_downloaded_count:                                                                                                            # only if number changed:
                 logger.debug("")
