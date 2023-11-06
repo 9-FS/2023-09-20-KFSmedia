@@ -1,13 +1,13 @@
 # Copyright (c) 2023 구FS, all rights reserved. Subject to the MIT licence in `licence.md`.
 import asyncio                          # concurrency
 import copy
+import img2pdf                          # conversion to PDF
 import inspect
 from KFSfstr import KFSfstr
 from KFSlog import KFSlog
 import logging
 import multiprocessing                  # CPU core count
 import pebble                           # multiprocessing
-import PIL, PIL.Image, PIL.ImageFile    # conversion to PDF
 import os
 import requests
 import time
@@ -17,7 +17,7 @@ import typing                           # function type hint
 class ConversionError(Exception):
     pass
 
-def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=None, if_success_delete_images: bool=True) -> list[PIL.Image.Image]:
+def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=None, if_success_delete_images: bool=True) -> bytes:
     """
     Converts images at filepaths to PDF and returns PDF. Upon failure exception will contain list of filepaths that failed.
 
@@ -35,7 +35,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
 
     conversion_failures_filepath: list[str]=[]  # conversion failures
     logger: logging.Logger                      # logger
-    PDF: list[PIL.Image.Image]=[]               # images converted for saving as pdf
+    PDF: bytes|None=None                        # images converted for saving as pdf
     success: bool=True                          # conversion successful?
 
 
@@ -47,39 +47,40 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
     else:                                       # if no root logger defined:
         logger=KFSlog.setup_logging("KFS")      # use KFS default format
     
-    PIL.ImageFile.LOAD_TRUNCATED_IMAGES=True    # set true or raises unnecessary exception sometimes
 
-
-    logger.info("Converting images to PDF...")
-    for image_filepath in images_filepath:                              # convert all saved images
-        try:
-            with PIL.Image.open(image_filepath) as image_file:          # open image
-                PDF.append(image_file.convert("RGBA").convert("RGB"))   # convert, append to PDF
-
-        except FileNotFoundError:                               # if user gave wrong filepath:
-            success=False                                       # conversion not successful
-            logger.error(f"Converting \"{image_filepath}\" to PDF failed, because image could not be found.")
-            conversion_failures_filepath.append(image_filepath) # append to failure list so parent function can retry downloading
-        
-        except PIL.UnidentifiedImageError:                      # if image is corrupted, earlier download may have failed:
-            success=False                                       # conversion not successful
-            logger.error(f"Converting \"{image_filepath}\" to PDF failed, because image is corrupted.")
+    for image_filepath in images_filepath:  # check if every image to convert exists
+        if os.path.isfile(image_filepath)==False:
+            success=False
+            logger.error(f"Unable to convert \"{image_filepath}\" to PDF, because image could not be found or is no file.")
             conversion_failures_filepath.append(image_filepath) # append to failure list so parent function can retry downloading
 
-            for i in range(3):  # try to delete corrupt image
-                logger.info(f"Deleting corrupted image \"{image_filepath}\"...")
-                try:
-                    os.remove(image_filepath)   # remove image, redownload later
-                except PermissionError:         # if could not be removed: try again, give up after try 3
-                    if i<2:
-                        logger.error(f"\rDeleting corrupted image \"{image_filepath}\" failed. Retrying after waiting 1s...")
-                        time.sleep(1)
-                        continue
-                    else:                       # if removing corrupted image failed after 10th try: give hentai up
-                        logger.error(f"\rDeleting corrupted image \"{image_filepath}\" failed 3 times. Giving up.")
-                else:
-                    logger.info(f"\rDeleted corrupted image \"{image_filepath}\".")
-                    break                       # break out of inner loop, but keep trying to convert images to PDF to remove all other corrupt images in this function call already and not later
+    
+    if success==True:                           # if conversion not already failed:
+        logger.info("Converting images to PDF...")
+        PDF=img2pdf.convert(images_filepath)    # convert all saved images
+        # except PIL.UnidentifiedImageError:                      # if image is corrupted, earlier download may have failed:
+        #     success=False                                       # conversion not successful
+        #     logger.error(f"Converting \"{image_filepath}\" to PDF failed, because image is corrupted.")
+        #     conversion_failures_filepath.append(image_filepath) # append to failure list so parent function can retry downloading
+
+        #     for i in range(3):  # try to delete corrupt image
+        #         logger.info(f"Deleting corrupted image \"{image_filepath}\"...")
+        #         try:
+        #             os.remove(image_filepath)   # remove image, redownload later
+        #         except PermissionError:         # if could not be removed: try again, give up after try 3
+        #             if i<2:
+        #                 logger.error(f"\rDeleting corrupted image \"{image_filepath}\" failed. Retrying after waiting 1s...")
+        #                 time.sleep(1)
+        #                 continue
+        #             else:                       # if removing corrupted image failed after 10th try: give hentai up
+        #                 logger.error(f"\rDeleting corrupted image \"{image_filepath}\" failed 3 times. Giving up.")
+        #         else:
+        #             logger.info(f"\rDeleted corrupted image \"{image_filepath}\".")
+        #             break                       # break out of inner loop, but keep trying to convert images to PDF to remove all other corrupt images in this function call already and not later
+        if PDF==None:
+            success=False
+            logger.error(f"Converting to PDF failed, because img2pdf.convert(...) resulted in None.")
+            conversion_failures_filepath=images_filepath    # add all images to failure list, because all failed
     
     if success==False:  # if unsuccessful: throw exception with failure list
         raise ConversionError(conversion_failures_filepath)
@@ -87,9 +88,10 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
         logger.info("\rConverted images to PDF.")
 
 
-    if PDF_filepath!=None:   # if filepath given: save PDF
+    if PDF_filepath!=None:  # if filepath given: save PDF
         logger.info(f"Saving \"{PDF_filepath}\"...")
-        PDF[0].save(PDF_filepath, save_all=True, append_images=PDF[1:])
+        with open(PDF_filepath, "wb") as PDF_file:
+            PDF_file.write(PDF) # type:ignore
         logger.info(f"\rSaved \"{PDF_filepath}\".")
 
     if if_success_delete_images==True:    # try to delete all source images if desired
@@ -99,7 +101,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
             except PermissionError:
                 logger.error(f"Deleting \"{image_filepath}\" failed. Skipping image.")
 
-    return PDF  # return PDF in case needed internally
+    return PDF  # return PDF in case needed internally # type:ignore
 
 
 def download_media_default(media_URL: str, media_filepath: str|None=None) -> bytes:
