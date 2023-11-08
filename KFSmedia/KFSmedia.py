@@ -55,9 +55,10 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
             conversion_failures_filepath.append(image_filepath) # append to failure list so parent function can retry downloading
 
     
-    if success==True:                           # if conversion not already failed:
+    if success==True:                                       # if conversion not already failed:
         logger.info("Converting images to PDF...")
-        PDF=img2pdf.convert(images_filepath)    # convert all saved images
+        try:
+            PDF=img2pdf.convert(images_filepath)            # convert all saved images
         # except PIL.UnidentifiedImageError:                      # if image is corrupted, earlier download may have failed:
         #     success=False                                       # conversion not successful
         #     logger.error(f"Converting \"{image_filepath}\" to PDF failed, because image is corrupted.")
@@ -77,6 +78,10 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
         #         else:
         #             logger.info(f"\rDeleted corrupted image \"{image_filepath}\".")
         #             break                       # break out of inner loop, but keep trying to convert images to PDF to remove all other corrupt images in this function call already and not later
+        except Exception as e:                              # img2pdf.convert unfortunately raises Exception, not a specific error
+            success=False
+            logger.error(f"Converting to PDF failed with {KFSfstr.full_class_name(e)}. Error message: {e.args}.")
+            conversion_failures_filepath=images_filepath    # add all images to failure list, because all failed
         if PDF==None:
             success=False
             logger.error(f"Converting to PDF failed, because img2pdf.convert(...) resulted in None.")
