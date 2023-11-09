@@ -82,7 +82,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
             success=False
             logger.error(f"Converting to PDF failed with {KFSfstr.full_class_name(e)}. Error message: {e.args}.")
             conversion_failures_filepath=images_filepath    # add all images to failure list, because all failed
-        if PDF==None:
+        if PDF==None and success==True:                     # if conversion failed and not already failed because of other reasons:
             success=False
             logger.error(f"Converting to PDF failed, because img2pdf.convert(...) resulted in None.")
             conversion_failures_filepath=images_filepath    # add all images to failure list, because all failed
