@@ -6,7 +6,7 @@ name        = "KFSmedia"
 packages    = [{ include = "KFSmedia" }]
 readme      = "readme.md"
 repository  = "https://github.com/9-FS/2023-09-20-KFSmedia"
-version     = "2.3.2"
+version     = "2.3.3"
 
 [tool.poetry.dependencies]
 img2pdf  = "^0.5.0"
