@@ -93,7 +93,9 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
         logger.info("\rConverted images to PDF.")
 
 
-    if PDF_filepath!=None:  # if filepath given: save PDF
+    if PDF_filepath!=None:                                              # if filepath given: save PDF
+        if os.path.dirname(PDF_filepath)!="":                           # if filepath contains directory part:
+            os.makedirs(os.path.dirname(PDF_filepath), exist_ok=True)   # create necessary directories for media file
         logger.info(f"Saving \"{PDF_filepath}\"...")
         with open(PDF_filepath, "wb") as PDF_file:
             PDF_file.write(PDF) # type:ignore
@@ -250,7 +252,7 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
                 medias[i]=process.result(timeout)           # enter result, because of None processes: i fits
             except requests.HTTPError as e:
                 success=False                               # download not successful
-                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with status code {e.response.status_code}.")    # type:ignore
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with status code {e.response.status_code}.")
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
             except (requests.exceptions.ChunkedEncodingError, requests.ConnectionError, requests.Timeout, TimeoutError) as e:
                 success=False                               # download not successful
@@ -311,13 +313,13 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
     async with asyncio.TaskGroup() as task_manager:                                 # open taskpool with maximum amount of workers as specified
         for i in range(len(medias_URL)):                                            # download missing medias and save as specified
             if medias_filepath[i]!=None:                                            # if media could interact with file system:
-                if os.path.isfile(medias_filepath[i])==True:                        # if media already exists: skip downloading, load for return # type:ignore
-                    with open(medias_filepath[i], "rb") as media_file:              # type:ignore
+                if os.path.isfile(medias_filepath[i])==True:                        # if media already exists: skip downloading, load for return
+                    with open(medias_filepath[i], "rb") as media_file:
                         medias[i]=media_file.read()
                     tasks.append(None)
                     continue
-                elif os.path.dirname(medias_filepath[i])!="":                       # if media does not exist already and filepath contains directory part: # type:ignore
-                    os.makedirs(os.path.dirname(medias_filepath[i]), exist_ok=True) # create necessary directories for media file # type:ignore
+                elif os.path.dirname(medias_filepath[i])!="":                       # if media does not exist already and filepath contains directory part:
+                    os.makedirs(os.path.dirname(medias_filepath[i]), exist_ok=True) # create necessary directories for media file
             
             tasks.append(task_manager.create_task(worker_function(media_URL=medias_URL[i], media_filepath=medias_filepath[i], **kwargs)))   # download and save media in worker task
 
@@ -342,7 +344,7 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
                 medias[i]=task.result()                     # enter result, because of None tasks: i fits
             except requests.HTTPError as e:
                 success=False                               # download not successful
-                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with status code {e.response.status_code}.")    # type:ignore
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with status code {e.response.status_code}.")
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
             except (requests.exceptions.ChunkedEncodingError, requests.ConnectionError, requests.Timeout) as e:
                 success=False                               # download not successful
