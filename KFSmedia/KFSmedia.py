@@ -35,8 +35,9 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
     """
 
     conversion_failures_filepath: list[str]=[]  # conversion failures
+    images: list[PIL.Image.Image]=[]            # images to convert to PDF
     logger: logging.Logger                      # logger
-    PDF: list[PIL.Image.Image]|bytes=[]         # images converted for saving as pdf
+    PDF: bytes                                  # images converted for saving as pdf
     success: bool=True                          # conversion successful?
 
 
@@ -68,10 +69,10 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
         #     success=False
         #     logger.error(f"Converting to PDF failed, because img2pdf.convert(...) resulted in None.")
         #     conversion_failures_filepath=images_filepath                                                        # add all images to failure list, because with this function can't say which one failed
-        for image_filepath in images_filepath:                              # convert all saved images to PDF
+        for image_filepath in images_filepath:                      # load all saved images, convert to RGB
             try:
-                with PIL.Image.open(image_filepath) as image_file:          # open image
-                    PDF.append(image_file.convert("RGBA").convert("RGB"))   # convert, append to PDF
+                with PIL.Image.open(image_filepath) as image_file:  # load image
+                    images.append(image_file.convert("RGB"))        # convert to RGB, append to image list
 
             except PIL.UnidentifiedImageError:                      # if image is corrupted, earlier download may have failed:
                 success=False                                       # conversion not successful
@@ -93,7 +94,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
                         logger.info(f"\rDeleted corrupted image \"{image_filepath}\".")
                         break                       # break out of inner loop, but keep trying to convert images to PDF to remove all other corrupt images in this function call already and not later
         
-        PDF=_convert_images_to_bytes(PDF)   # list[PIL.Image.Image] -> bytes
+        PDF=_convert_images_to_bytes(images)    # convert to PDF, list[PIL.Image.Image] -> bytes
 
     if success==False:  # if unsuccessful: throw exception with failure list
         raise ConversionError(conversion_failures_filepath)
@@ -231,10 +232,10 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
             
             kwargs_copy=copy.deepcopy(kwargs)   # copy kwargs to not modify original
             if "media_URL" in kwargs:           # if already exists and will be overwritten: warning
-                logging.warning(f"Provided keyword argument media_URL \"{kwargs['media_URL']}\" is overwritten by medias_URL[{i}] \"{medias_URL[i]}\".")
+                logging.warning(f"Provided keyword argument media_URL \"{kwargs["media_URL"]}\" is overwritten by medias_URL[{i}] \"{medias_URL[i]}\".")
             kwargs_copy["media_URL"]=medias_URL[i]
             if "media_filepath" in kwargs:      # if already exists and will be overwritten: warning
-                logging.warning(f"Provided keyword argument media_filepath \"{kwargs['media_filepath']}\" is overwritten by medias_filepath[{i}] \"{medias_filepath[i]}\".")
+                logging.warning(f"Provided keyword argument media_filepath \"{kwargs["media_filepath"]}\" is overwritten by medias_filepath[{i}] \"{medias_filepath[i]}\".")
             kwargs_copy["media_filepath"]=medias_filepath[i]
             
             processes.append(process_manager.schedule(worker_function, kwargs=kwargs_copy, timeout=timeout)) # download and save media in worker process # type:ignore
@@ -382,12 +383,15 @@ def _convert_images_to_bytes(images: list[PIL.Image.Image]) -> bytes:
     - bytes: converted images
     """
 
-    byte_stream: io.BytesIO=io.BytesIO()  # byte stream to save images to
+    byte_stream: io.BytesIO=io.BytesIO()    # byte stream to save images to
+    byte_stream_value: bytes                # byte stream value to return
 
 
     if len(images)==0:  # if no input: no output
         return b""
     
 
-    images[0].save(byte_stream, append_images=images[1:], format="PDF", save_all=True)  # save images as PDF bytes
-    return byte_stream.getvalue()
+    images[0].save(byte_stream, append_images=images[1:], format="PDF", save_all=True)  # save images in PDF byte stream
+    byte_stream_value=byte_stream.getvalue()                                            # get byte stream value
+    byte_stream.close()
+    return byte_stream_value
