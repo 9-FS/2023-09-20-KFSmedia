@@ -57,8 +57,9 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
             conversion_failures_filepath.append(image_filepath) # append to failure list so parent function can retry downloading
 
     
-    if success==True:                                                       # if conversion not already failed:
-        logger.info("Converting images to PDF...")
+    if success==True:                                               # if conversion not already failed:
+        PIL.ImageFile.LOAD_TRUNCATED_IMAGES=True                    # set true or raises unnecessary exception sometimes
+        logger.info("Loading and converting images to PDF...")
         # try:
         #     PDF=img2pdf.convert(images_filepath, pillow_limit_break=True, rotation=img2pdf.Rotation.ifvalid)    # convert all saved images
         # except ValueError as e:
@@ -99,7 +100,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
     if success==False:  # if unsuccessful: throw exception with failure list
         raise ConversionError(conversion_failures_filepath)
     else:
-        logger.info("\rConverted images to PDF.")
+        logger.info("\rLoaded and converted images to PDF.")
 
 
     if PDF_filepath!=None:                                              # if filepath given: save PDF
