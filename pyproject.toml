@@ -2,15 +2,15 @@
 authors     = ["9FS <pray4spam@googlemail.com>"]
 description = ""
 license     = "MIT"
-name        = "KFSmedia"
-packages    = [{ include = "KFSmedia" }]
-readme      = "readme.md"
-repository  = "https://github.com/9-FS/2023-09-20-KFSmedia"
-version     = "2.5.2"
+name        = "kfsmedia"
+packages    = [{ include = "kfsmedia" }]
+readme      = "readme.typ"
+repository  = "https://github.com/9-FS/kfsmedia"
+version     = "3.0.0"
 
 [tool.poetry.dependencies]
-kfsfstr  = "^1.1.0"
-kfslog   = "^2.0.0"
+kfsfstr  = "^2.0.0"
+kfslog   = "^3.0.0"
 olefile  = "^0.47"
 pebble   = "^5.0.0"
 pillow   = "^10.2.0"
