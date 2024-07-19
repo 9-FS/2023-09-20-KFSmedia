@@ -6,7 +6,7 @@ name        = "kfsmedia"
 packages    = [{ include = "kfsmedia" }]
 readme      = "readme.typ"
 repository  = "https://github.com/9-FS/kfsmedia"
-version     = "3.0.0"
+version     = "3.0.1"
 
 [tool.poetry.dependencies]
 kfsfstr  = "^2.0.0"

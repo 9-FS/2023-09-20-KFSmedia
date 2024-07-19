@@ -3,8 +3,8 @@ import asyncio
 import copy
 import inspect
 import io                               # PDF byte stream
-from KFSfstr import KFSfstr
-from KFSlog import KFSlog
+from kfsfstr import kfsfstr
+from kfslog import kfslog
 import logging
 import multiprocessing                  # CPU core count
 import pebble                           # multiprocessing
@@ -45,10 +45,10 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
     PDF_filepath=str(PDF_filepath)
 
     if 1<=len(logging.getLogger("").handlers):  # if root logger defined handlers:
-        logger=logging.getLogger("")            # also use root logger to match formats defined outside KFS
+        logger=logging.getLogger("")            # also use root logger to match formats defined outside kfs
     else:                                       # if no root logger defined:
-        logger=KFSlog.setup_logging("KFS")      # use KFS default format
-    
+        logger=kfslog.setup_logging("kfs")      # use kfs default format
+
 
     for image_filepath in images_filepath:  # check if every image to convert exists
         if os.path.isfile(image_filepath)==False:
@@ -56,7 +56,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
             logger.error(f"Unable to convert \"{image_filepath}\" to PDF, because image could not be found or is no file.")
             conversion_failures_filepath.append(image_filepath) # append to failure list so parent function can retry downloading
 
-    
+
     if success==True:                                               # if conversion not already failed:
         PIL.ImageFile.LOAD_TRUNCATED_IMAGES=True                    # set true or raises unnecessary exception sometimes
         logger.info("Loading and converting images to PDF...")
@@ -64,7 +64,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
         #     PDF=img2pdf.convert(images_filepath, pillow_limit_break=True, rotation=img2pdf.Rotation.ifvalid)    # convert all saved images
         # except ValueError as e:
         #     success=False
-        #     logger.error(f"Converting to PDF failed with {KFSfstr.full_class_name(e)}. Error message: {e.args}.")
+        #     logger.error(f"Converting to PDF failed with {kfsfstr.full_class_name(e)}. Error message: {e.args}.")
         #     conversion_failures_filepath=images_filepath                                                        # add all images to failure list, because all failed
         # if PDF==None and success==True:                                                                         # if conversion failed and not already failed because of other reasons:
         #     success=False
@@ -94,7 +94,7 @@ def convert_images_to_PDF(images_filepath: list[str], PDF_filepath: str|None=Non
                     else:
                         logger.info(f"\rDeleted corrupted image \"{image_filepath}\".")
                         break                       # break out of inner loop, but keep trying to convert images to PDF to remove all other corrupt images in this function call already and not later
-        
+
         PDF=_convert_images_to_bytes(images)    # convert to PDF, list[PIL.Image.Image] -> bytes
 
     if success==False:  # if unsuccessful: throw exception with failure list
@@ -176,7 +176,7 @@ async def download_media_default_async(media_URL: str, media_filepath: str|None=
 
 def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
                     worker_function: typing.Callable=download_media_default, workers_max=multiprocessing.cpu_count(), timeout: float|None=None,
-                    **kwargs) -> list[bytes]: 
+                    **kwargs) -> list[bytes]:
     """
     Downloads medias from medias_URL and saves as specified in medias_filepath. Exceptions from worker function will not be catched. If file already exists at media filepath, assumes that this media has already been downloaded and does not redownload it. Also loads it and uses it in return list.
 
@@ -204,15 +204,15 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
     medias_downloaded_count_old: int=0                              # how many already loaded or downloaded in iteration previous
     processes: list[pebble.ProcessFuture|None]=[]                   # worker process for download, None means no worker process was necessary for that media, used to keep media order
     success: bool=True                                              # download successful?
-    
+
 
     medias_URL=list(medias_URL)
     medias_filepath=list(medias_filepath)
 
     if 1<=len(logging.getLogger("").handlers):  # if root logger defined handlers:
-        logger=logging.getLogger("")            # also use root logger to match formats defined outside KFS
+        logger=logging.getLogger("")            # also use root logger to match formats defined outside kfs
     else:                                       # if no root logger defined:
-        logger=KFSlog.setup_logging("KFS")      # use KFS default format
+        logger=kfslog.setup_logging("kfs")      # use kfs default format
 
     if len(medias_URL)!=len(medias_filepath):   # check if every media to download has exactly 1 filepath to save to
         logging.error("Length of medias_URL and medias_filepath must be the same.")
@@ -230,7 +230,7 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
                     continue
                 elif os.path.dirname(medias_filepath[i])!="":                       # if media does not exist already and filepath contains directory part: # type:ignore
                     os.makedirs(os.path.dirname(medias_filepath[i]), exist_ok=True) # create necessary directories for media file # type:ignore
-            
+
             kwargs_copy=copy.deepcopy(kwargs)   # copy kwargs to not modify original
             if "media_URL" in kwargs:           # if already exists and will be overwritten: warning
                 logging.warning(f"Provided keyword argument media_URL \"{kwargs["media_URL"]}\" is overwritten by medias_URL[{i}] \"{medias_URL[i]}\".")
@@ -238,22 +238,22 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
             if "media_filepath" in kwargs:      # if already exists and will be overwritten: warning
                 logging.warning(f"Provided keyword argument media_filepath \"{kwargs["media_filepath"]}\" is overwritten by medias_filepath[{i}] \"{medias_filepath[i]}\".")
             kwargs_copy["media_filepath"]=medias_filepath[i]
-            
+
             processes.append(process_manager.schedule(worker_function, kwargs=kwargs_copy, timeout=timeout)) # download and save media in worker process # type:ignore
 
 
         medias_downloaded_count=len(medias)-medias.count(None)+[process.done() for process in processes if process!=None].count(True)                                           # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
-        logger.info(f"Download media process {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
+        logger.info(f"Download media process {kfsfstr.notation_abs(medias_downloaded_count, 0, True)}/{kfsfstr.notation_abs(len(medias_URL), 0, True)} finished.")
         while all([process.done() for process in processes if process!=None])==False:                                                                                           # as long as processes still not done: loop here for updating progress
             medias_downloaded_count=len(medias)-medias.count(None)+[process.done() for process in processes if process!=None].count(True)                                       # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
             if medias_downloaded_count_old!=medias_downloaded_count:                                                                                                            # only if number changed:
                 logger.debug("")
-                logger.info(f"\rDownload media process {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")    # refresh console
+                logger.info(f"\rDownload media process {kfsfstr.notation_abs(medias_downloaded_count, 0, True)}/{kfsfstr.notation_abs(len(medias_URL), 0, True)} finished.")    # refresh console
                 medias_downloaded_count_old=medias_downloaded_count                                                                                                             # update count old
             time.sleep(0.1)                                                                                                                                                     # sleep in any case to not throttle code by refreshing with more than 10Hz
         medias_downloaded_count=len(medias)-medias.count(None)+[process.done() for process in processes if process!=None].count(True)                                           # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
         logger.debug("")
-        logger.info(f"\rDownload media process {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
+        logger.info(f"\rDownload media process {kfsfstr.notation_abs(medias_downloaded_count, 0, True)}/{kfsfstr.notation_abs(len(medias_URL), 0, True)} finished.")
 
         for i, process in enumerate(processes):             # collect results
             if process==None:                               # if process is None: skip
@@ -266,9 +266,9 @@ def download_medias(medias_URL: list[str], medias_filepath: list[str|None],
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
             except (requests.exceptions.ChunkedEncodingError, requests.ConnectionError, requests.Timeout, TimeoutError) as e:
                 success=False                               # download not successful
-                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with {KFSfstr.full_class_name(e)}. Error message: {e.args}.")
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with {kfsfstr.full_class_name(e)}. Error message: {e.args}.")
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
-        
+
         if success==False:  # if unsuccessful: throw exception with failure list
             raise DownloadError(download_failures_URL)
         else:
@@ -304,15 +304,15 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
     logger: logging.Logger                                          # logger
     success: bool=True                                              # download successful?
     tasks: list[asyncio.Future|None]=[]                             # worker tasks for download, None means no worker task was necessary for that media, used to keep media order
-    
+
 
     medias_URL=list(medias_URL)
     medias_filepath=list(medias_filepath)
 
     if 1<=len(logging.getLogger("").handlers):  # if root logger defined handlers:
-        logger=logging.getLogger("")            # also use root logger to match formats defined outside KFS
+        logger=logging.getLogger("")            # also use root logger to match formats defined outside kfs
     else:                                       # if no root logger defined:
-        logger=KFSlog.setup_logging("KFS")      # use KFS default format
+        logger=kfslog.setup_logging("kfs")      # use kfs default format
 
     if len(medias_URL)!=len(medias_filepath):   # check if every media to download has exactly 1 filepath to save to
         logging.error("Length of medias_URL and medias_filepath must be the same.")
@@ -330,22 +330,22 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
                     continue
                 elif os.path.dirname(medias_filepath[i])!="":                       # if media does not exist already and filepath contains directory part:
                     os.makedirs(os.path.dirname(medias_filepath[i]), exist_ok=True) # create necessary directories for media file
-            
+
             tasks.append(task_manager.create_task(worker_function(media_URL=medias_URL[i], media_filepath=medias_filepath[i], **kwargs)))   # download and save media in worker task
 
-        
+
         medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
-        logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
+        logger.info(f"\rDownload media thread {kfsfstr.notation_abs(medias_downloaded_count, 0, True)}/{kfsfstr.notation_abs(len(medias_URL), 0, True)} finished.")
         while all([task.done() for task in tasks if task!=None])==False:                                                                                                        # as long as processes still not done: loop here for updating progress
             medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                                    # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
             if medias_downloaded_count_old!=medias_downloaded_count:                                                                                                            # only if number changed:
                 logger.debug("")
-                logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")     # refresh console
+                logger.info(f"\rDownload media thread {kfsfstr.notation_abs(medias_downloaded_count, 0, True)}/{kfsfstr.notation_abs(len(medias_URL), 0, True)} finished.")     # refresh console
                 medias_downloaded_count_old=medias_downloaded_count                                                                                                             # update count old
             await asyncio.sleep(0.1)                                                                                                                                            # sleep in any case to not throttle code by refreshing with more than 10Hz
         medias_downloaded_count=len(medias)-medias.count(None)+[task.done() for task in tasks if task!=None].count(True)                                                        # number of loaded medias + number of downloaded, don't use os.isfile because slower and filepath may be None
         logger.debug("")
-        logger.info(f"\rDownload media thread {KFSfstr.notation_abs(medias_downloaded_count, 0, True)}/{KFSfstr.notation_abs(len(medias_URL), 0, True)} finished.")
+        logger.info(f"\rDownload media thread {kfsfstr.notation_abs(medias_downloaded_count, 0, True)}/{kfsfstr.notation_abs(len(medias_URL), 0, True)} finished.")
 
         for i, task in enumerate(tasks):    # collect results
             if task==None:                  # if task is None: skip
@@ -358,9 +358,9 @@ async def download_medias_async(medias_URL: list, medias_filepath: list,
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
             except (requests.exceptions.ChunkedEncodingError, requests.ConnectionError, requests.Timeout) as e:
                 success=False                               # download not successful
-                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with {KFSfstr.full_class_name(e)}. Error message: {e.args}.")
+                logger.error(f"Downloading media \"{medias_URL[i]}\" failed with {kfsfstr.full_class_name(e)}. Error message: {e.args}.")
                 download_failures_URL.append(medias_URL[i]) # append to failure list so parent function can retry downloading
-        
+
         if success==False:  # if unsuccessful: throw exception with failure list
             raise DownloadError(download_failures_URL)
         else:
@@ -390,7 +390,7 @@ def _convert_images_to_bytes(images: list[PIL.Image.Image]) -> bytes:
 
     if len(images)==0:  # if no input: no output
         return b""
-    
+
 
     images[0].save(byte_stream, append_images=images[1:], format="PDF", save_all=True)  # save images in PDF byte stream
     byte_stream_value=byte_stream.getvalue()                                            # get byte stream value
